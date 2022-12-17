@@ -1,0 +1,6 @@
+*.jar
+res
+.vscode
+*.class
+src/client
+*.log
