@@ -1,9 +1,16 @@
-import java.io.*;
-import java.net.*;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
 import java.util.ArrayDeque;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Queue;
-import java.util.concurrent.*;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 interface ClientListener {
   void msgRcvd(String msg);
@@ -12,11 +19,31 @@ interface ClientListener {
 
 public class Server implements ClientListener, Runnable {
   public static final int PORT = 3936;
+  public static final int SUBSELNUM = 3;
   LinkedList<Client> lstClient = new LinkedList<Client>();
   private Queue<String> msgQueue = new ArrayDeque<String>();
   private ExecutorService executer = Executors.newCachedThreadPool();
+  private Selector selector;
+  private Selector[] subSelectors = new Selector[SUBSELNUM];
+  private int next = 0;
+  private ServerSocketChannel serverSocket;
 
-  private Server() {}
+  private Server() { // MainReactor
+    try {
+      selector = Selector.open();
+      for(int i = 0; i < subSelectors.length; i++) {
+        subSelectors[i] = Selector.open();
+      }
+      serverSocket = ServerSocketChannel.open();
+      serverSocket.bind(new InetSocketAddress(PORT));
+      serverSocket.configureBlocking(false);
+      System.out.println("Started: " + serverSocket);
+      SelectionKey sk = serverSocket.register(selector, SelectionKey.OP_ACCEPT);
+      sk.attach(new Acceptor());        
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+  }
   private static Server theServer = new Server();
 
   protected static Server getServer() {
@@ -38,31 +65,38 @@ public class Server implements ClientListener, Runnable {
   @Override
   public void clientQuit(Client c) {
       lstClient.remove(c);
-      c.stopRx();
+      // c.stopRx();
   }
   
   void go() throws IOException {
-    ServerSocket s = new ServerSocket(PORT);
-    System.out.println("Started: " + s);
-    try { // 无论try块里是否出现异常, 都能保证s被close
+    try { 
       Runnable queueRunner = this;
       executer.submit(queueRunner);
+      for (int i = 0; i < SUBSELNUM; i++) {
+        executer.submit(new SubReactor(subSelectors[i]));
+      }
       while (true) {
-        // Blocks until a connection occurs
-        Socket socket = s.accept();
-        // System.out.println("Connection accepted: " + socket);
-        Client c = new Client(socket);
-        c.addMsgListener(this);
-        lstClient.add(c);
-        // c.startListen();
-        executer.submit(c);
+        selector.select();
+        Set selected = selector.selectedKeys();
+        Iterator it = selected.iterator();
+        while (it.hasNext()) {
+          dispatch((SelectionKey)(it.next()));
+        }
+        selected.clear();
       }
     } catch (IOException e) {
     } finally {
       executer.shutdown();
-      s.close();
+      serverSocket.close();
     }
   } 
+
+  void dispatch(SelectionKey k) {
+    Runnable r = (Runnable)(k.attachment());
+    if (r != null) {
+      r.run();
+    }
+  }
 
   @Override
   public void run() {
@@ -83,6 +117,47 @@ public class Server implements ClientListener, Runnable {
           } catch (InterruptedException e) {}
         }
       }
+  }
+
+  class Acceptor implements Runnable { // inner
+    @Override
+    public void run() {
+        try {
+            SocketChannel sc = serverSocket.accept();
+            // System.out.println("Connection accepted: " + sc);
+            if (sc != null) {
+              Client c = new Client(subSelectors[next], sc);
+              if (++next == subSelectors.length) next = 0;
+              c.addMsgListener(theServer);
+              lstClient.add(c);
+              // executer.submit(c);
+            }
+        } catch(IOException ex) {}
+    }
+  }
+
+  class SubReactor implements Runnable {
+    private Selector subSelector;
+
+    SubReactor(Selector sel) {
+      subSelector = sel;
+    }
+
+    @Override
+    public void run() {
+      try {
+        while (true) {
+          subSelector.select();
+          Set selected = subSelector.selectedKeys();
+          Iterator it = selected.iterator();
+          while (it.hasNext()) {
+            dispatch((SelectionKey) (it.next()));
+          }
+          selected.clear();
+        }
+      } catch (IOException e) {
+      }
+    }
   }
   
   public static void main(String[] args) throws IOException {
