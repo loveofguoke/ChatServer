@@ -20,6 +20,7 @@ interface ClientListener {
 public class Server implements ClientListener, Runnable {
   public static final int PORT = 3936;
   public static final int SUBSELNUM = 3;
+  private static Server theServer = new Server();
   LinkedList<Client> lstClient = new LinkedList<Client>();
   private Queue<String> msgQueue = new ArrayDeque<String>();
   private ExecutorService executer = Executors.newCachedThreadPool();
@@ -44,28 +45,24 @@ public class Server implements ClientListener, Runnable {
       e.printStackTrace();
     }
   }
-  private static Server theServer = new Server();
 
   protected static Server getServer() {
     return theServer;
   }
   synchronized void sendMsg(String msg) {
-    // for (Client c : lstClient) {
-    //   c.sendMsg(msg);
-    // }
     msgQueue.add(msg);
     this.notify();
   }
 
   @Override
   public void msgRcvd(String msg) {
-      sendMsg(msg);
+    sendMsg(msg);
   }
 
   @Override
-  public void clientQuit(Client c) {
-      lstClient.remove(c);
-      // c.stopRx();
+  synchronized public void clientQuit(Client c) {
+    lstClient.remove(c);
+    // c.stopRx();
   }
   
   void go() throws IOException {
@@ -129,7 +126,9 @@ public class Server implements ClientListener, Runnable {
               Client c = new Client(subSelectors[next], sc);
               if (++next == subSelectors.length) next = 0;
               c.addMsgListener(theServer);
-              lstClient.add(c);
+              synchronized (theServer) {
+                lstClient.add(c);
+              }
               // executer.submit(c);
             }
         } catch(IOException ex) {}
