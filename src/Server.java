@@ -74,8 +74,8 @@ public class Server implements ClientListener, Runnable {
       }
       while (true) {
         selector.select();
-        Set selected = selector.selectedKeys();
-        Iterator it = selected.iterator();
+        Set<SelectionKey> selected = selector.selectedKeys();
+        Iterator<SelectionKey> it = selected.iterator();
         while (it.hasNext()) {
           dispatch((SelectionKey)(it.next()));
         }
@@ -147,8 +147,8 @@ public class Server implements ClientListener, Runnable {
       try {
         while (true) {
           subSelector.select();
-          Set selected = subSelector.selectedKeys();
-          Iterator it = selected.iterator();
+          Set<SelectionKey> selected = subSelector.selectedKeys();
+          Iterator<SelectionKey> it = selected.iterator();
           while (it.hasNext()) {
             dispatch((SelectionKey) (it.next()));
           }
