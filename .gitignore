@@ -4,3 +4,5 @@ res
 *.class
 src/client
 *.log
+.idea
+*.iml

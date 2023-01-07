@@ -38,24 +38,24 @@ public class Client extends Thread {
 
   @Override
   public void run() {
-      try {
-        // String str = in.readLine();
-        // in.clear();
-        // socket.read(in);
-        ByteBuffer in = ByteBuffer.allocate(MAXIN);
-        socket.read(in);
-        String str = new String(in.array());
-        // System.out.println("####1"+str+"####2");
-        notifyMsgRcvd(str);
-        if (str.equals("END")) {
-          System.out.println("closing...");
-          quit();
-        }
-        // System.out.println("Echoing: " + str);
-        // out.println(str);
-      } catch (IOException e) {
+    try {
+      // String str = in.readLine();
+      // in.clear();
+      // socket.read(in);
+      ByteBuffer in = ByteBuffer.allocate(MAXIN);
+      socket.read(in);
+      String str = new String(in.array());
+      // System.out.println("####1"+str+"####2");
+      notifyMsgRcvd(str);
+      if (str.equals("END")) {
+        System.out.println("closing...");
         quit();
-      } 
+      }
+      // System.out.println("Echoing: " + str);
+      // out.println(str);
+    } catch (IOException e) {
+      quit();
+    } 
   }
 
   synchronized void sendMsg(String line) {
